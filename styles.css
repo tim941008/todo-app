@@ -1,14 +1,14 @@
 /* ==========================================================
-   待辦清單 — 樣式表（毛玻璃風格、深色模式、響應式設計）
+   待辦清單 ＆ 番茄鐘 — 行動小工具風格（Mobile Widget Style）樣式表
    ========================================================== */
 
 :root {
   --bg: #eef0fb;
   --bg-grad: linear-gradient(135deg, #e0e7ff 0%, #f5f3ff 45%, #fdf2f8 100%);
-  --glass: rgba(255, 255, 255, 0.62);
-  --glass-strong: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.75);
-  --field-bg: rgba(255, 255, 255, 0.7);
+  --glass: rgba(255, 255, 255, 0.68);
+  --glass-strong: rgba(255, 255, 255, 0.86);
+  --glass-border: rgba(255, 255, 255, 0.78);
+  --field-bg: rgba(255, 255, 255, 0.74);
   --text: #1e1b3a;
   --muted: #6b6a85;
   --border: rgba(99, 102, 241, 0.16);
@@ -21,9 +21,9 @@
   --danger-bg: rgba(225, 29, 72, 0.1);
   --warning-bg: rgba(234, 88, 12, 0.12);
   --success-bg: rgba(22, 163, 74, 0.12);
-  --shadow: 0 8px 32px rgba(76, 70, 160, 0.14);
-  --radius: 20px;
-  --radius-sm: 12px;
+  --shadow: 0 12px 32px rgba(76, 70, 160, 0.12);
+  --radius: 24px;
+  --radius-sm: 14px;
   --blob-1: #a5b4fc;
   --blob-2: #f0abfc;
   --blob-3: #67e8f9;
@@ -33,10 +33,10 @@
 [data-theme="dark"] {
   --bg: #0b0d1a;
   --bg-grad: linear-gradient(135deg, #0b0d1a 0%, #141634 50%, #1a1030 100%);
-  --glass: rgba(30, 32, 58, 0.55);
-  --glass-strong: rgba(36, 38, 68, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --field-bg: rgba(15, 17, 35, 0.6);
+  --glass: rgba(28, 30, 56, 0.62);
+  --glass-strong: rgba(36, 38, 68, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --field-bg: rgba(15, 17, 35, 0.65);
   --text: #eceaff;
   --muted: #a3a1c2;
   --border: rgba(165, 180, 252, 0.14);
@@ -49,7 +49,7 @@
   --danger-bg: rgba(251, 113, 133, 0.14);
   --warning-bg: rgba(251, 146, 60, 0.14);
   --success-bg: rgba(74, 222, 128, 0.12);
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   --blob-1: #4338ca;
   --blob-2: #7e22ce;
   --blob-3: #0e7490;
@@ -69,7 +69,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  padding: max(2rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom));
+  padding: max(1.5rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom));
 }
 
 /* 首次繪製後才啟用主題過場，避免載入時閃爍。 */
@@ -96,26 +96,70 @@ body {
   to { transform: translate(40px, 30px) scale(1.08); }
 }
 
-/* ---------- 版面 ---------- */
-.app { width: 100%; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
+/* ---------- 小工具外殼與網格版面 (Widget Layout) ---------- */
+.app {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
 
 .glass {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
 }
 
-.app-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.app-header h1 {
-  margin: 0; font-size: clamp(1.6rem, 4vw, 2.1rem); letter-spacing: 0.02em;
-  background: linear-gradient(90deg, var(--primary), var(--primary-2));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+.widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.35rem;
 }
-.subtitle { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9rem; }
+
+.widget-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
+  margin-bottom: 0.25rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: clamp(1.45rem, 3.2vw, 1.85rem);
+  letter-spacing: 0.02em;
+  background: linear-gradient(90deg, var(--primary), var(--primary-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.subtitle { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.85rem; }
 .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+.widget-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.widget-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
 
 button { font: inherit; cursor: pointer; color: inherit; }
 input, select { font: inherit; color: inherit; }
@@ -123,8 +167,7 @@ input, select { font: inherit; color: inherit; }
 .icon-btn {
   width: 2.75rem; height: 2.75rem; border-radius: 50%; font-size: 1.15rem;
   display: grid; place-items: center;
-  background: var(--glass); border: 1px solid var(--glass-border);
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  background: var(--field-bg); border: 1px solid var(--glass-border);
   transition: transform 0.25s var(--ease), border-color 0.2s;
 }
 .icon-btn:hover { transform: rotate(18deg) scale(1.05); border-color: var(--primary); }
@@ -139,33 +182,180 @@ input, select { font: inherit; color: inherit; }
 }
 .pill-btn:hover { background: var(--primary); color: var(--on-primary); }
 
-/* ---------- 統計儀表板 ---------- */
-.dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.85rem; }
+/* ---------- 統計儀表板小工具 (2x2 Bento Cards) ---------- */
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
 .stat-card {
-  padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.2rem;
+  padding: 0.95rem 1.05rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
   transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
-.stat-card:hover { transform: translateY(-3px); }
-.stat-label { color: var(--muted); font-size: 0.85rem; }
-.stat-value { font-size: 1.85rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.stat-card:hover { transform: translateY(-2px); }
+.stat-label { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.stat-value { font-size: 1.65rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .stat-success { color: var(--success); }
 .stat-warning { color: var(--warning); }
 .stat-primary { color: var(--primary); }
 .stat-value.bump { animation: bump 0.35s var(--ease); }
 @keyframes bump { 50% { transform: scale(1.18); } }
 
-.progress { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-top: 0.35rem; }
+.progress { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-top: 0.3rem; }
 .progress-bar {
   height: 100%; width: 0; border-radius: inherit;
   background: linear-gradient(90deg, var(--primary), var(--primary-2));
   transition: width 0.6s var(--ease);
 }
 
-/* ---------- 主面板 ---------- */
-.panel { padding: 1.5rem; }
+/* ---------- 番茄鐘小工具 (Pomodoro Widget) ---------- */
+.pomodoro-card {
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  position: relative;
+  overflow: hidden;
+}
+.pomodoro-card[data-mode="break"] {
+  --pomo-accent: var(--success);
+}
+.pomodoro-card[data-mode="work"] {
+  --pomo-accent: var(--primary);
+}
+
+.pomo-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.widget-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.pomo-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.pomo-modes {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+}
+.pomo-mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition: background 0.25s var(--ease), color 0.2s;
+}
+.pomo-mode-btn:hover { color: var(--text); }
+.pomo-mode-btn.active {
+  background: linear-gradient(135deg, var(--pomo-accent, var(--primary)), var(--primary-2));
+  color: var(--on-primary);
+}
+.pomodoro-card[data-mode="break"] .pomo-mode-btn.active {
+  background: var(--success);
+  color: #fff;
+}
+
+.pomo-ring-wrap {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  display: grid;
+  place-items: center;
+}
+.pomo-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.pomo-ring-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 8;
+}
+.pomo-ring-progress {
+  fill: none;
+  stroke: var(--pomo-accent, var(--primary));
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 326.73;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.35s linear, stroke 0.3s;
+}
+.pomo-time-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.pomo-status {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.pomo-time {
+  font-size: 2.2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+}
+
+.pomo-controls {
+  width: 100%;
+  display: flex;
+  gap: 0.6rem;
+}
+.pomo-btn-main {
+  flex: 1;
+}
+.pomo-btn-sub {
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--field-bg);
+  color: var(--muted);
+  font-weight: 600;
+  transition: border-color 0.2s, color 0.2s;
+}
+.pomo-btn-sub:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+/* ---------- 待辦任務主面板 ---------- */
+.panel { padding: 1.35rem; }
 
 .field {
-  width: 100%; padding: 0.75rem 0.95rem; min-height: 2.9rem;
+  width: 100%; padding: 0.7rem 0.95rem; min-height: 2.8rem;
   background: var(--field-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
   outline: none; transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -173,15 +363,15 @@ input, select { font: inherit; color: inherit; }
 select.field { cursor: pointer; }
 [data-theme="dark"] .field { color-scheme: dark; }
 
-.todo-form { display: flex; flex-direction: column; gap: 0.75rem; }
-.todo-form > .field { font-size: 1.05rem; }
-.form-row { display: flex; gap: 0.75rem; align-items: flex-end; }
-.field-group { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 0; }
-.field-caption { font-size: 0.78rem; color: var(--muted); padding-left: 0.2rem; }
-.form-row .field { height: 2.9rem; }
+.todo-form { display: flex; flex-direction: column; gap: 0.7rem; }
+.todo-form > .field { font-size: 1.02rem; }
+.form-row { display: flex; gap: 0.65rem; align-items: flex-end; }
+.field-group { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 0; }
+.field-caption { font-size: 0.76rem; color: var(--muted); padding-left: 0.2rem; font-weight: 600; }
+.form-row .field { height: 2.8rem; }
 
 .btn-primary {
-  min-height: 2.9rem; padding: 0 1.4rem; border: none; border-radius: var(--radius-sm);
+  min-height: 2.8rem; padding: 0 1.35rem; border: none; border-radius: var(--radius-sm);
   background: linear-gradient(135deg, var(--primary), var(--primary-2));
   color: var(--on-primary); font-weight: 700; white-space: nowrap;
   box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 35%, transparent);
@@ -190,10 +380,10 @@ select.field { cursor: pointer; }
 .btn-primary:hover { transform: translateY(-2px); filter: brightness(1.06); }
 .btn-primary:active { transform: translateY(0) scale(0.97); }
 
-.toolbar { display: flex; flex-direction: column; gap: 0.75rem; margin: 1.35rem 0 0.75rem; }
-.toolbar-row { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.sort-wrap { min-width: 150px; }
-.sort-wrap .field { min-height: 2.6rem; padding-block: 0.5rem; }
+.toolbar { display: flex; flex-direction: column; gap: 0.65rem; margin: 1.15rem 0 0.75rem; }
+.toolbar-row { display: flex; gap: 0.65rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.sort-wrap { min-width: 145px; }
+.sort-wrap .field { min-height: 2.5rem; padding-block: 0.45rem; }
 
 .filters {
   display: flex; gap: 0.25rem; padding: 0.25rem; border-radius: 999px;
@@ -201,7 +391,8 @@ select.field { cursor: pointer; }
 }
 .filter-btn {
   border: none; background: transparent; color: var(--muted);
-  padding: 0.45rem 1rem; border-radius: 999px; min-height: 2.2rem;
+  padding: 0.4rem 0.95rem; border-radius: 999px; min-height: 2.1rem;
+  font-size: 0.9rem;
   transition: background 0.25s var(--ease), color 0.2s;
 }
 .filter-btn:hover { color: var(--text); }
@@ -211,11 +402,11 @@ select.field { cursor: pointer; }
 }
 
 /* ---------- 任務列表 ---------- */
-.todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; }
 
 .todo-item {
-  position: relative; display: flex; align-items: flex-start; gap: 0.85rem;
-  padding: 0.85rem 0.95rem 0.85rem 1.15rem;
+  position: relative; display: flex; align-items: flex-start; gap: 0.8rem;
+  padding: 0.8rem 0.9rem 0.8rem 1.1rem;
   background: var(--glass-strong); border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
   transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), opacity 0.25s;
   overflow: hidden;
@@ -233,23 +424,23 @@ select.field { cursor: pointer; }
 
 .todo-item .toggle {
   appearance: none; -webkit-appearance: none; flex-shrink: 0; margin: 0.15rem 0 0;
-  width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 2px solid var(--muted);
+  width: 1.35rem; height: 1.35rem; border-radius: 50%; border: 2px solid var(--muted);
   display: grid; place-items: center; cursor: pointer; transition: all 0.2s var(--ease);
 }
-.todo-item .toggle::after { content: "✓"; color: #fff; font-size: 0.85rem; font-weight: 700; transform: scale(0); transition: transform 0.25s var(--ease); }
+.todo-item .toggle::after { content: "✓"; color: #fff; font-size: 0.82rem; font-weight: 700; transform: scale(0); transition: transform 0.25s var(--ease); }
 .todo-item .toggle:checked { background: var(--success); border-color: var(--success); animation: pop 0.3s var(--ease); }
 .todo-item .toggle:checked::after { transform: scale(1); }
 @keyframes pop { 50% { transform: scale(1.2); } }
 
-.todo-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-.todo-text { word-break: break-word; font-size: 1rem; transition: color 0.2s; }
+.todo-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.todo-text { word-break: break-word; font-size: 0.98rem; transition: color 0.2s; }
 .todo-item.completed .todo-text { text-decoration: line-through; color: var(--muted); }
 .todo-item.completed { opacity: 0.72; }
 
-.todo-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.todo-meta { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .badge {
   display: inline-flex; align-items: center; gap: 0.25rem;
-  font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px;
+  font-size: 0.74rem; font-weight: 600; padding: 0.14rem 0.55rem; border-radius: 999px;
   background: var(--border); color: var(--muted);
 }
 .priority-badge.high { background: var(--danger-bg); color: var(--danger); }
@@ -262,26 +453,26 @@ select.field { cursor: pointer; }
 .todo-edit-row { display: flex; gap: 0.5rem; }
 .todo-edit-row .field { min-height: 2.5rem; padding-block: 0.45rem; }
 
-.todo-actions { display: flex; gap: 0.3rem; flex-shrink: 0; opacity: 0.55; transition: opacity 0.2s; }
+.todo-actions { display: flex; gap: 0.25rem; flex-shrink: 0; opacity: 0.6; transition: opacity 0.2s; }
 .todo-item:hover .todo-actions, .todo-item:focus-within .todo-actions { opacity: 1; }
 .action-btn {
   background: transparent; border: 1px solid transparent; border-radius: 8px;
-  padding: 0.3rem 0.6rem; color: var(--muted); font-size: 0.85rem; min-height: 2rem;
+  padding: 0.28rem 0.55rem; color: var(--muted); font-size: 0.82rem; min-height: 2rem;
   transition: all 0.2s;
 }
 .action-btn:hover { border-color: var(--border); color: var(--text); background: var(--field-bg); }
 .action-btn.delete:hover { color: var(--danger); border-color: var(--danger); }
 .action-btn.save:hover { color: var(--success); border-color: var(--success); }
 
-.empty-state { text-align: center; color: var(--muted); padding: 2.5rem 0 1.5rem; margin: 0; font-size: 1rem; animation: fadeIn 0.4s var(--ease); }
+.empty-state { text-align: center; color: var(--muted); padding: 2.2rem 0 1.2rem; margin: 0; font-size: 0.95rem; animation: fadeIn 0.4s var(--ease); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .app-footer {
   display: flex; justify-content: space-between; align-items: center;
-  margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--border);
-  font-size: 0.875rem; color: var(--muted);
+  margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border);
+  font-size: 0.85rem; color: var(--muted);
 }
-.link-btn { background: none; border: none; color: var(--muted); padding: 0.3rem 0; }
+.link-btn { background: none; border: none; color: var(--muted); padding: 0.25rem 0; }
 .link-btn:hover:not(:disabled) { color: var(--danger); text-decoration: underline; }
 .link-btn:disabled { opacity: 0.4; cursor: default; }
 
@@ -289,7 +480,7 @@ select.field { cursor: pointer; }
 .toast {
   position: fixed; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom));
   transform: translateX(-50%); z-index: 10; max-width: calc(100% - 2rem);
-  padding: 0.75rem 1.2rem; border-radius: 999px; font-size: 0.9rem;
+  padding: 0.7rem 1.2rem; border-radius: 999px; font-size: 0.88rem;
   background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: var(--shadow);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   animation: toastIn 0.35s var(--ease);
@@ -299,19 +490,50 @@ select.field { cursor: pointer; }
 
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-/* ---------- 響應式 ---------- */
-@media (max-width: 720px) {
-  .dashboard { grid-template-columns: repeat(2, 1fr); }
+/* ---------- 平板與行動小工具版面 (Mobile Widget Responsive) ---------- */
+@media (max-width: 860px) {
+  .widget-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .pomodoro-card {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 1.05rem 1.2rem;
+  }
+  .pomo-header { width: 100%; }
+  .pomo-modes { width: auto; flex: 1; min-width: 210px; }
+  .pomo-ring-wrap { width: 132px; height: 132px; margin-inline: auto; }
+  .pomo-time { font-size: 1.85rem; }
+  .pomo-controls { width: auto; flex: 1; min-width: 200px; }
 }
 
 @media (max-width: 560px) {
-  body { padding: max(1rem, env(safe-area-inset-top)) 0.75rem max(1.5rem, env(safe-area-inset-bottom)); }
-  .app { gap: 1rem; }
-  .panel { padding: 1.1rem; border-radius: 18px; }
-  .stat-card { padding: 0.85rem 0.95rem; }
-  .stat-value { font-size: 1.5rem; }
+  body {
+    padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem max(1.25rem, env(safe-area-inset-bottom));
+  }
+  .app { gap: 0.75rem; }
+  .widget-header { padding: 0.9rem 1.05rem; border-radius: 20px; }
+  .dashboard {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+  }
+  .stat-card { padding: 0.8rem 0.95rem; border-radius: 20px; }
+  .stat-value { font-size: 1.45rem; }
+  .pomodoro-card {
+    flex-direction: column;
+    padding: 1rem;
+    border-radius: 20px;
+    gap: 0.75rem;
+  }
+  .pomo-modes, .pomo-controls { width: 100%; }
+  .pomo-ring-wrap { width: 144px; height: 144px; }
+  .panel { padding: 1.05rem; border-radius: 20px; }
   .form-row { flex-wrap: wrap; }
-  .form-row .field-group { flex: 1 1 calc(50% - 0.375rem); }
+  .form-row .field-group { flex: 1 1 calc(50% - 0.35rem); }
   .form-row .btn-primary { flex: 1 1 100%; }
   .toolbar-row { flex-direction: column; align-items: stretch; }
   .filters { justify-content: space-between; }

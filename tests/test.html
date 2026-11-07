@@ -98,7 +98,7 @@
       check('語系為繁體中文', D.documentElement.lang === 'zh-Hant-TW');
       check('標題為中文', $('#app-title').textContent === '我的待辦清單');
       check('輸入框提示為中文', $('#todo-input').placeholder === '今天要完成什麼事？');
-      check('新增按鈕為中文', /新增/.test($('.btn-primary').textContent));
+      check('新增按鈕為中文', /新增/.test($('#todo-form .btn-primary').textContent));
       check('篩選按鈕為中文', $$('.filter-btn').map(function (b) { return b.textContent; }).join('|') === '全部|未完成|已完成');
       check('顯示今日日期', /^今天是 \d{4} 年/.test($('#today-label').textContent), $('#today-label').textContent);
       check('初始顯示空白提示', !$('#empty-state').hidden && /目前沒有任務/.test($('#empty-state').textContent));
@@ -203,7 +203,7 @@
       check('儀表板數字正確（3 項／1 完成）', stats() === '3,1,2,33%', stats());
       check('進度條寬度同步', $('#progress-bar').style.width === '33%', $('#progress-bar').style.width);
       check('進度條無障礙數值', $('.progress').getAttribute('aria-valuenow') === '33');
-      check('儀表板標籤為中文', $$('.stat-label').map(function (e) { return e.textContent; }).join('|') === '總任務數|已完成|未完成|完成率');
+      check('儀表板標籤為中文', $$('.stat-label').map(function (e) { return e.textContent; }).join('|') === '總任務|已完成|未完成|完成率');
 
       // ===== 編輯 =====
       item('寫報告').querySelector('[data-action="edit"]').click();
@@ -331,17 +331,41 @@
       await reload();
       check('損毀資料不會造成錯誤', $$('.todo-item').length === 0 && !$('#empty-state').hidden);
 
-      // ===== 響應式 =====
+      // ===== 番茄鐘 (Pomodoro Timer) =====
+      check('番茄鐘小工具存在', !!$('#pomodoro-widget'));
+      check('番茄鐘模式按鈕為中文', $('#pomo-mode-work').textContent === '25分鐘工作' && $('#pomo-mode-break').textContent === '5分鐘休息');
+      check('番茄鐘預設為 25:00 工作模式', $('#pomo-display').textContent === '25:00' && $('#pomodoro-widget').getAttribute('data-mode') === 'work');
+      check('番茄鐘狀態文字為專注工作中', $('#pomo-status-label').textContent === '專注工作中');
+      check('番茄鐘預設按鈕為「開始」', $('#pomo-toggle').textContent === '開始' && $('#pomo-reset').textContent === '重置');
+      $('#pomo-toggle').click();
+      check('點擊開始後按鈕變為「暫停」', $('#pomo-toggle').textContent === '暫停' && W.__pomoTest.getState().running === true);
+      W.__pomoTest.tick(65);
+      check('番茄鐘倒數計時更新畫面與圓環', $('#pomo-display').textContent === '23:55' && parseFloat($('#pomo-ring-progress').style.strokeDashoffset) > 0, $('#pomo-display').textContent);
+      $('#pomo-toggle').click();
+      check('點擊暫停後停止計時', $('#pomo-toggle').textContent === '開始' && W.__pomoTest.getState().running === false);
+      $('#pomo-reset').click();
+      check('點擊重置恢復 25:00', $('#pomo-display').textContent === '25:00' && parseFloat($('#pomo-ring-progress').style.strokeDashoffset) === 0);
+      $('#pomo-mode-break').click();
+      check('切換至 5分鐘休息模式顯示 05:00', $('#pomo-display').textContent === '05:00' && $('#pomodoro-widget').getAttribute('data-mode') === 'break' && $('#pomo-status-label').textContent === '休息放鬆中');
+      $('#pomo-mode-work').click();
+      check('切換回 25分鐘工作模式顯示 25:00', $('#pomo-display').textContent === '25:00' && $('#pomodoro-widget').getAttribute('data-mode') === 'work');
+      W.__pomoTest.tick(25 * 60);
+      check('完成 25分鐘工作自動累計番茄數並進入 5分鐘休息', $('#pomo-sessions').textContent === '已完成 1 顆🍅' && $('#pomodoro-widget').getAttribute('data-mode') === 'break' && $('#pomo-display').textContent === '05:00');
+      check('番茄鐘完成階段儲存至 localStorage', W.localStorage.getItem('todo-app:pomodoros') === '1');
+      W.__pomoTest.tick(5 * 60);
+      check('完成 5分鐘休息自動切回 25分鐘工作', $('#pomodoro-widget').getAttribute('data-mode') === 'work' && $('#pomo-display').textContent === '25:00');
+
+      // ===== 響應式與行動小工具版面 (Mobile Widget Layout) =====
       add('手機版測試任務', dayOffset(2), 'high');
       frame.style.width = '360px';
       await wait(80);
       check('手機版工具列改為直向', W.getComputedStyle($('.toolbar-row')).flexDirection === 'column', W.getComputedStyle($('.toolbar-row')).flexDirection);
-      check('手機版儀表板兩欄', W.getComputedStyle($('.dashboard')).gridTemplateColumns.split(' ').length === 2, W.getComputedStyle($('.dashboard')).gridTemplateColumns);
+      check('手機版儀表板兩欄小工具卡片', W.getComputedStyle($('.dashboard')).gridTemplateColumns.split(' ').length === 2, W.getComputedStyle($('.dashboard')).gridTemplateColumns);
       check('手機版無水平捲動', D.documentElement.scrollWidth <= W.innerWidth, D.documentElement.scrollWidth + ' > ' + W.innerWidth);
       check('手機版輸入框至少 16px（避免 iOS 放大）', parseFloat(W.getComputedStyle($('#todo-input')).fontSize) >= 16);
-      frame.style.width = '820px';
+      frame.style.width = '980px';
       await wait(80);
-      check('桌面版儀表板四欄', W.getComputedStyle($('.dashboard')).gridTemplateColumns.split(' ').length === 4);
+      check('桌面版小工具雙欄網格版面', W.getComputedStyle($('.widget-grid')).gridTemplateColumns.split(' ').length === 2, W.getComputedStyle($('.widget-grid')).gridTemplateColumns);
 
       // ===== PWA =====
       check('頁面連結 manifest', !!$('link[rel="manifest"]'));

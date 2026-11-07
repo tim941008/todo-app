@@ -1,18 +1,23 @@
 /* ==========================================================
-   待辦清單 — 主程式
+   待辦清單 ＆ 番茄鐘 — 主程式（生產力小工具 Productivity Widget）
    功能：新增／編輯／刪除／完成任務、截止日期、優先級、
-        搜尋、篩選、排序、統計儀表板、深色模式、PWA
+        搜尋、篩選、排序、統計儀表板、番茄鐘（25分工作／5分休息）、
+        深色模式、PWA 離線快取
    ========================================================== */
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'todo-app:todos';
   var THEME_KEY = 'todo-app:theme';
+  var POMO_KEY = 'todo-app:pomodoros';
   var MAX_LEN = 200;
   var PRIORITIES = ['high', 'medium', 'low'];
   var PRIORITY_LABEL = { high: '高', medium: '中', low: '低' };
   var PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
   var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  var POMO_DURATIONS = { work: 25 * 60, break: 5 * 60 };
+  var RING_CIRCUMFERENCE = 2 * Math.PI * 52; // r=52 -> ~326.73
 
   // ---------- 日期工具 ----------
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -87,6 +92,19 @@
     }
   }
 
+  function loadPomoSessions() {
+    try {
+      var n = parseInt(localStorage.getItem(POMO_KEY) || '0', 10);
+      return isNaN(n) || n < 0 ? 0 : n;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function savePomoSessions(n) {
+    try { localStorage.setItem(POMO_KEY, String(n)); } catch (e) {}
+  }
+
   function uid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -119,6 +137,16 @@
   var installBtn = $('install-btn');
   var stat = { total: $('stat-total'), completed: $('stat-completed'), active: $('stat-active'), rate: $('stat-rate') };
   var progressBar = $('progress-bar');
+
+  // 番茄鐘 DOM
+  var pomoWidget = $('pomodoro-widget');
+  var pomoDisplay = $('pomo-display');
+  var pomoStatusLabel = $('pomo-status-label');
+  var pomoRing = $('pomo-ring-progress');
+  var pomoToggleBtn = $('pomo-toggle');
+  var pomoResetBtn = $('pomo-reset');
+  var pomoSessionsEl = $('pomo-sessions');
+  var pomoModeBtns = document.querySelectorAll('.pomo-mode-btn');
 
   // ---------- 提示訊息 ----------
   function toast(msg, isError) {
@@ -354,6 +382,130 @@
     };
   }
 
+  // ---------- 番茄鐘 (Pomodoro Timer) ----------
+  var pomo = {
+    mode: 'work',
+    remaining: POMO_DURATIONS.work,
+    running: false,
+    timerId: null,
+    sessions: loadPomoSessions()
+  };
+
+  function formatClock(sec) {
+    var s = Math.max(0, Math.floor(sec));
+    return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  }
+
+  function playChime() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch (e) {}
+  }
+
+  function renderPomo() {
+    if (!pomoWidget) return;
+    pomoWidget.setAttribute('data-mode', pomo.mode);
+    pomoDisplay.textContent = formatClock(pomo.remaining);
+    pomoStatusLabel.textContent = pomo.mode === 'work' ? '專注工作中' : '休息放鬆中';
+    pomoToggleBtn.textContent = pomo.running ? '暫停' : '開始';
+    pomoSessionsEl.textContent = '已完成 ' + pomo.sessions + ' 顆🍅';
+
+    var total = POMO_DURATIONS[pomo.mode];
+    var ratio = total ? Math.max(0, Math.min(1, pomo.remaining / total)) : 1;
+    var offset = RING_CIRCUMFERENCE * (1 - ratio);
+    pomoRing.style.strokeDashoffset = offset.toFixed(2);
+
+    pomoModeBtns.forEach(function (b) {
+      var on = b.dataset.mode === pomo.mode;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  function stopPomoLoop() {
+    if (pomo.timerId) {
+      clearInterval(pomo.timerId);
+      pomo.timerId = null;
+    }
+    pomo.running = false;
+  }
+
+  function setPomoMode(mode) {
+    if (mode !== 'work' && mode !== 'break') return;
+    stopPomoLoop();
+    pomo.mode = mode;
+    pomo.remaining = POMO_DURATIONS[mode];
+    renderPomo();
+  }
+
+  function stepPomo(seconds) {
+    var delta = typeof seconds === 'number' ? seconds : 1;
+    pomo.remaining = Math.max(0, pomo.remaining - delta);
+    if (pomo.remaining <= 0) {
+      stopPomoLoop();
+      playChime();
+      if (pomo.mode === 'work') {
+        pomo.sessions += 1;
+        savePomoSessions(pomo.sessions);
+        pomo.mode = 'break';
+        pomo.remaining = POMO_DURATIONS.break;
+        toast('🎉 25分鐘工作完成！開始 5分鐘休息吧。');
+      } else {
+        pomo.mode = 'work';
+        pomo.remaining = POMO_DURATIONS.work;
+        toast('⏰ 5分鐘休息結束！準備開始新的番茄鐘。');
+      }
+    }
+    renderPomo();
+  }
+
+  function togglePomo() {
+    if (pomo.running) {
+      stopPomoLoop();
+    } else {
+      pomo.running = true;
+      pomo.timerId = setInterval(function () { stepPomo(1); }, 1000);
+    }
+    renderPomo();
+  }
+
+  function resetPomo() {
+    stopPomoLoop();
+    pomo.remaining = POMO_DURATIONS[pomo.mode];
+    renderPomo();
+  }
+
+  if (pomoWidget) {
+    pomoToggleBtn.addEventListener('click', togglePomo);
+    pomoResetBtn.addEventListener('click', resetPomo);
+    pomoModeBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setPomoMode(btn.dataset.mode);
+      });
+    });
+    renderPomo();
+  }
+
+  // 提供自動化測試控制番茄鐘的輔助介面
+  window.__pomoTest = {
+    tick: stepPomo,
+    setMode: setPomoMode,
+    reset: resetPomo,
+    getState: function () { return { mode: pomo.mode, remaining: pomo.remaining, running: pomo.running, sessions: pomo.sessions }; }
+  };
+
   // ---------- 事件 ----------
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -433,6 +585,7 @@
   // 多個分頁之間同步資料
   window.addEventListener('storage', function (e) {
     if (e.key === STORAGE_KEY) { todos = loadTodos(); render(); }
+    if (e.key === POMO_KEY) { pomo.sessions = loadPomoSessions(); renderPomo(); }
   });
 
   // ---------- 主題 ----------
