@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant-TW">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="A fast, offline-friendly Todo app with dark mode, search and filters." />
-  <meta name="theme-color" content="#4f46e5" />
-  <title>Todo App</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="輕巧快速、可離線使用的待辦清單，支援截止日期、優先級、統計儀表板與深色模式。" />
+  <meta name="theme-color" content="#6366f1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="待辦清單" />
+  <title>待辦清單 Todo App</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="styles.css" />
   <script>
-    // Apply saved theme before paint to avoid a flash of the wrong theme.
+    // 在畫面繪製前套用已儲存的主題，避免閃爍。
     (function () {
       try {
         var t = localStorage.getItem('todo-app:theme');
@@ -20,40 +26,101 @@
   </script>
 </head>
 <body>
+  <div class="bg-blobs" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
   <main class="app" aria-labelledby="app-title">
     <header class="app-header">
-      <h1 id="app-title">My Tasks</h1>
-      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
-        <span class="icon-sun" aria-hidden="true">☀️</span>
-        <span class="icon-moon" aria-hidden="true">🌙</span>
-      </button>
+      <div>
+        <h1 id="app-title">我的待辦清單</h1>
+        <p id="today-label" class="subtitle"></p>
+      </div>
+      <div class="header-actions">
+        <button id="install-btn" class="pill-btn" type="button" hidden>安裝 App</button>
+        <button id="theme-toggle" class="icon-btn" type="button" aria-label="切換深色模式" title="切換深色模式">
+          <span class="icon-sun" aria-hidden="true">☀️</span>
+          <span class="icon-moon" aria-hidden="true">🌙</span>
+        </button>
+      </div>
     </header>
 
-    <form id="todo-form" class="todo-form" autocomplete="off">
-      <label for="todo-input" class="sr-only">New task</label>
-      <input id="todo-input" type="text" placeholder="What needs to be done?" maxlength="200" required />
-      <button type="submit" class="btn-primary">Add</button>
-    </form>
-    <p id="form-error" class="form-error" role="alert" hidden></p>
-
-    <section class="toolbar" aria-label="Search and filter">
-      <label for="search-input" class="sr-only">Search tasks</label>
-      <input id="search-input" type="search" placeholder="Search tasks…" />
-      <div class="filters" role="group" aria-label="Filter tasks">
-        <button type="button" class="filter-btn active" data-filter="all" aria-pressed="true">All</button>
-        <button type="button" class="filter-btn" data-filter="active" aria-pressed="false">Active</button>
-        <button type="button" class="filter-btn" data-filter="completed" aria-pressed="false">Completed</button>
+    <section class="dashboard" aria-label="統計儀表板">
+      <div class="stat-card glass">
+        <span class="stat-label">總任務數</span>
+        <span id="stat-total" class="stat-value">0</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-label">已完成</span>
+        <span id="stat-completed" class="stat-value stat-success">0</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-label">未完成</span>
+        <span id="stat-active" class="stat-value stat-warning">0</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-label">完成率</span>
+        <span id="stat-rate" class="stat-value stat-primary">0%</span>
+        <div class="progress" role="progressbar" aria-label="完成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
       </div>
     </section>
 
-    <ul id="todo-list" class="todo-list" aria-live="polite"></ul>
-    <p id="empty-state" class="empty-state" hidden></p>
+    <section class="panel glass">
+      <form id="todo-form" class="todo-form" autocomplete="off">
+        <label for="todo-input" class="sr-only">新增任務</label>
+        <input id="todo-input" class="field" type="text" placeholder="今天要完成什麼事？" maxlength="200" />
+        <div class="form-row">
+          <label class="field-group">
+            <span class="field-caption">截止日期</span>
+            <input id="due-input" class="field" type="date" aria-label="截止日期" />
+          </label>
+          <label class="field-group">
+            <span class="field-caption">優先級</span>
+            <select id="priority-input" class="field" aria-label="優先級">
+              <option value="high">高優先級</option>
+              <option value="medium" selected>中優先級</option>
+              <option value="low">低優先級</option>
+            </select>
+          </label>
+          <button type="submit" class="btn-primary">＋ 新增</button>
+        </div>
+      </form>
 
-    <footer class="app-footer">
-      <span id="todo-count">0 tasks left</span>
-      <button id="clear-completed" type="button" class="link-btn">Clear completed</button>
-    </footer>
+      <div class="toolbar" aria-label="搜尋、篩選與排序">
+        <label for="search-input" class="sr-only">搜尋任務</label>
+        <input id="search-input" class="field search" type="search" placeholder="🔍 搜尋任務…" />
+        <div class="toolbar-row">
+          <div class="filters" role="group" aria-label="篩選任務">
+            <button type="button" class="filter-btn active" data-filter="all" aria-pressed="true">全部</button>
+            <button type="button" class="filter-btn" data-filter="active" aria-pressed="false">未完成</button>
+            <button type="button" class="filter-btn" data-filter="completed" aria-pressed="false">已完成</button>
+          </div>
+          <label class="sort-wrap">
+            <span class="sr-only">排序方式</span>
+            <select id="sort-select" class="field" aria-label="排序方式">
+              <option value="created">依建立時間</option>
+              <option value="priority">依優先級</option>
+              <option value="due">依截止日期</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <ul id="todo-list" class="todo-list" aria-live="polite"></ul>
+      <p id="empty-state" class="empty-state" hidden></p>
+
+      <footer class="app-footer">
+        <span id="todo-count">剩餘 0 項任務</span>
+        <button id="clear-completed" type="button" class="link-btn">清除已完成</button>
+      </footer>
+    </section>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="app.js"></script>
 </body>

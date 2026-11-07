@@ -1,19 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>Todo App – Tests</title>
+  <title>待辦清單 — 自動化測試</title>
   <style>
-    body { font-family: system-ui, sans-serif; padding: 1rem; }
+    body { font-family: system-ui, "Microsoft JhengHei", sans-serif; padding: 1rem; }
     .pass { color: #16a34a; } .fail { color: #dc2626; font-weight: bold; }
-    iframe { width: 420px; height: 600px; border: 1px solid #ccc; }
+    iframe { width: 820px; height: 900px; border: 1px solid #ccc; }
   </style>
 </head>
 <body>
-  <h1>Todo App Tests</h1>
-  <pre id="summary">running…</pre>
+  <h1>待辦清單 — 自動化測試</h1>
+  <pre id="summary">執行中…</pre>
   <ol id="results"></ol>
-  <iframe id="frame" title="App under test"></iframe>
+  <iframe id="frame" title="受測應用程式"></iframe>
 
   <script>
   (async function () {
@@ -21,205 +21,372 @@
     var resultsEl = document.getElementById('results');
     var summaryEl = document.getElementById('summary');
     var passed = 0, failed = 0;
+    var isHttp = /^https?:$/.test(location.protocol);
 
+    // ---------- 測試工具 ----------
     function log(ok, name, detail) {
       var li = document.createElement('li');
       li.className = ok ? 'pass' : 'fail';
-      li.textContent = (ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '');
+      li.textContent = (ok ? 'PASS ' : 'FAIL ') + name + (detail !== undefined && !ok ? ' :: ' + detail : '');
       resultsEl.appendChild(li);
       ok ? passed++ : failed++;
     }
-    function check(name, cond, detail) { log(!!cond, name, cond ? '' : detail); }
+    function check(name, cond, detail) { log(!!cond, name, detail); }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
     function load() {
       return new Promise(function (res) {
-        frame.onload = function () { setTimeout(res, 50); };
+        frame.onload = function () { setTimeout(res, 80); };
         frame.src = '../index.html?t=' + Date.now();
       });
     }
     var W, D;
+    async function reload() { await load(); W = frame.contentWindow; D = W.document; }
     function $(s) { return D.querySelector(s); }
     function $$(s) { return Array.prototype.slice.call(D.querySelectorAll(s)); }
     function texts() { return $$('.todo-text').map(function (e) { return e.textContent; }); }
-    function add(text) {
+    function fire(node, type) { node.dispatchEvent(new W.Event(type, { bubbles: true, cancelable: true })); }
+    function add(text, due, prio) {
       $('#todo-input').value = text;
-      $('#todo-form').dispatchEvent(new W.Event('submit', { cancelable: true, bubbles: true }));
+      $('#due-input').value = due || '';
+      $('#priority-input').value = prio || 'medium';
+      fire($('#todo-form'), 'submit');
     }
-    function itemByText(t) {
+    function item(t) {
       return $$('.todo-item').filter(function (li) {
         var s = li.querySelector('.todo-text'); return s && s.textContent === t;
       })[0];
     }
     function stored() { return JSON.parse(W.localStorage.getItem('todo-app:todos') || '[]'); }
-    function setSearch(v) { $('#search-input').value = v; $('#search-input').dispatchEvent(new W.Event('input', { bubbles: true })); }
+    function storedItem(t) { return stored().filter(function (x) { return x.text === t; })[0]; }
+    function setSearch(v) { $('#search-input').value = v; fire($('#search-input'), 'input'); }
     function setFilter(f) { $('.filter-btn[data-filter="' + f + '"]').click(); }
+    function setSort(v) { $('#sort-select').value = v; fire($('#sort-select'), 'change'); }
+    function key(node, k) { node.dispatchEvent(new W.KeyboardEvent('keydown', { key: k, bubbles: true })); }
+    function stats() {
+      return ['total', 'completed', 'active', 'rate'].map(function (k) { return $('#stat-' + k).textContent; }).join(',');
+    }
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function dayOffset(n) {
+      var d = new Date(); d.setDate(d.getDate() + n);
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+    function fetchText(url) {
+      return new Promise(function (res, rej) {
+        var x = new XMLHttpRequest();
+        x.open('GET', url);
+        x.onload = function () { res(x.responseText); };
+        x.onerror = function () { rej(new Error('無法讀取 ' + url)); };
+        x.send();
+      });
+    }
+    function loadImage(url) {
+      return new Promise(function (res) {
+        var img = new Image();
+        img.onload = function () { res({ w: img.naturalWidth, h: img.naturalHeight }); };
+        img.onerror = function () { res(null); };
+        img.src = url;
+      });
+    }
 
     try {
-      // Fresh start
-      await load();
-      frame.contentWindow.localStorage.clear();
-      await load();
-      W = frame.contentWindow; D = W.document;
+      // ===== 初始狀態 =====
+      await reload();
+      W.localStorage.clear();
+      await reload();
 
-      check('Empty state shown initially', !$('#empty-state').hidden && /No tasks yet/.test($('#empty-state').textContent));
-      check('Counter shows 0', $('#todo-count').textContent === '0 tasks left', $('#todo-count').textContent);
-      check('Clear completed disabled initially', $('#clear-completed').disabled);
+      check('語系為繁體中文', D.documentElement.lang === 'zh-Hant-TW');
+      check('標題為中文', $('#app-title').textContent === '我的待辦清單');
+      check('輸入框提示為中文', $('#todo-input').placeholder === '今天要完成什麼事？');
+      check('新增按鈕為中文', /新增/.test($('.btn-primary').textContent));
+      check('篩選按鈕為中文', $$('.filter-btn').map(function (b) { return b.textContent; }).join('|') === '全部|未完成|已完成');
+      check('顯示今日日期', /^今天是 \d{4} 年/.test($('#today-label').textContent), $('#today-label').textContent);
+      check('初始顯示空白提示', !$('#empty-state').hidden && /目前沒有任務/.test($('#empty-state').textContent));
+      check('剩餘數量為 0', $('#todo-count').textContent === '剩餘 0 項任務', $('#todo-count').textContent);
+      check('儀表板初始為 0', stats() === '0,0,0,0%', stats());
+      check('初始時「清除已完成」停用', $('#clear-completed').disabled);
 
-      // Add
-      add('Buy milk');
-      add('  Walk   the dog  ');
-      add('Write report');
-      check('Adds 3 tasks', $$('.todo-item').length === 3, $$('.todo-item').length);
-      check('Newest task first', texts()[0] === 'Write report', texts().join('|'));
-      check('Whitespace normalized', texts().indexOf('Walk the dog') !== -1, texts().join('|'));
-      check('Input cleared after add', $('#todo-input').value === '');
-      check('Counter pluralized', $('#todo-count').textContent === '3 tasks left', $('#todo-count').textContent);
-      check('Persisted to localStorage', stored().length === 3);
+      // ===== 新增任務 =====
+      add('買牛奶');
+      add('  遛   狗  ', '', 'low');
+      add('寫報告', '', 'high');
+      check('新增 3 項任務', $$('.todo-item').length === 3, $$('.todo-item').length);
+      check('最新任務排在最前', texts()[0] === '寫報告', texts().join('|'));
+      check('多餘空白會被整理', texts().indexOf('遛 狗') !== -1, texts().join('|'));
+      check('新增後清空輸入框', $('#todo-input').value === '');
+      check('剩餘數量更新', $('#todo-count').textContent === '剩餘 3 項任務', $('#todo-count').textContent);
+      check('資料儲存至 localStorage', stored().length === 3);
+      check('預設為中優先級', storedItem('買牛奶').priority === 'medium');
+      check('新任務有進場動畫', item('寫報告').classList.contains('enter'));
 
-      // Empty add rejected
       add('    ');
-      check('Empty task rejected', $$('.todo-item').length === 3);
-      check('Empty task shows error', !$('#form-error').hidden);
+      check('拒絕空白任務', $$('.todo-item').length === 3);
+      check('空白任務顯示錯誤提示', !$('#toast').hidden && $('#toast').classList.contains('error') && /不可為空白/.test($('#toast').textContent), $('#toast').textContent);
 
-      // XSS safety
       add('<img src=x onerror="window.__xss=1">');
-      check('HTML rendered as text', !$('.todo-text img') && W.__xss === undefined);
+      check('HTML 以純文字顯示（防 XSS）', !$('.todo-text img') && W.__xss === undefined);
+      add(new Array(300).join('字'));
+      check('任務內容上限 200 字', texts()[0].length === 200, texts()[0].length);
 
-      // Long text truncated
-      add(new Array(300).join('a'));
-      check('Long text capped at 200 chars', texts()[0].length === 200, texts()[0].length);
-
-      // Delete
-      itemByText('<img src=x onerror="window.__xss=1">').querySelector('[data-action="delete"]').click();
+      // ===== 刪除 =====
+      item('<img src=x onerror="window.__xss=1">').querySelector('[data-action="delete"]').click();
       $$('.todo-item')[0].querySelector('[data-action="delete"]').click();
-      check('Delete removes tasks', $$('.todo-item').length === 3, $$('.todo-item').length);
-      check('Delete persisted', stored().length === 3);
+      check('刪除任務', $$('.todo-item').length === 3, $$('.todo-item').length);
+      check('刪除結果已儲存', stored().length === 3);
+      check('刪除按鈕為中文', item('買牛奶').querySelector('[data-action="delete"]').textContent === '刪除');
 
-      // Complete
-      var cb = itemByText('Buy milk').querySelector('.toggle');
-      cb.click();
-      check('Toggle marks completed', itemByText('Buy milk').classList.contains('completed'));
-      check('Completion persisted', stored().filter(function (t) { return t.text === 'Buy milk'; })[0].completed === true);
-      check('Counter singular/updated', $('#todo-count').textContent === '2 tasks left', $('#todo-count').textContent);
-      check('Clear completed enabled', !$('#clear-completed').disabled);
-      itemByText('Buy milk').querySelector('.toggle').click();
-      check('Toggle back to active', !itemByText('Buy milk').classList.contains('completed'));
-      itemByText('Buy milk').querySelector('.toggle').click();
+      // ===== 優先級 =====
+      check('高優先級樣式', item('寫報告').classList.contains('priority-high'));
+      check('低優先級樣式', item('遛 狗').classList.contains('priority-low'));
+      var hb = item('寫報告').querySelector('.priority-badge');
+      check('優先級標籤文字', hb.textContent === '高優先級' && item('買牛奶').querySelector('.priority-badge').textContent === '中優先級');
+      var cHigh = W.getComputedStyle(hb).color;
+      var cMed = W.getComputedStyle(item('買牛奶').querySelector('.priority-badge')).color;
+      var cLow = W.getComputedStyle(item('遛 狗').querySelector('.priority-badge')).color;
+      check('高／中／低顏色皆不同', cHigh !== cMed && cMed !== cLow && cHigh !== cLow, [cHigh, cMed, cLow].join(' '));
+      function isReddish(c) { var m = c.match(/\d+/g).map(Number); return m[0] > 180 && m[1] < 120; }
+      function isGreenish(c) { var m = c.match(/\d+/g).map(Number); return m[1] > m[0] && m[1] > m[2]; }
+      function isOrange(c) { var m = c.match(/\d+/g).map(Number); return m[0] > 200 && m[1] > 60 && m[1] < 170 && m[2] < 80; }
+      check('高優先級為紅色', isReddish(cHigh), cHigh);
+      check('中優先級為橘色', isOrange(cMed), cMed);
+      check('低優先級為綠色', isGreenish(cLow), cLow);
 
-      // Edit via button + Enter
-      itemByText('Write report').querySelector('[data-action="edit"]').click();
+      // ===== 截止日期 =====
+      add('昨天的任務', dayOffset(-1), 'medium');
+      add('今天的任務', dayOffset(0), 'low');
+      add('明天的任務', dayOffset(1), 'high');
+      add('下週的任務', dayOffset(7), 'medium');
+      var dOver = item('昨天的任務').querySelector('.due-badge');
+      var dToday = item('今天的任務').querySelector('.due-badge');
+      var dTom = item('明天的任務').querySelector('.due-badge');
+      check('顯示截止日期', !!dOver && dOver.textContent.indexOf(dayOffset(-1).replace(/-/g, '/')) !== -1, dOver && dOver.textContent);
+      check('截止日期顯示於任務文字下方', dOver.parentNode.previousElementSibling.classList.contains('todo-text'));
+      check('已逾期標示', dOver.classList.contains('overdue') && /已逾期 1 天/.test(dOver.textContent), dOver.textContent);
+      check('今天到期標示', dToday.classList.contains('today') && /今天到期/.test(dToday.textContent), dToday.textContent);
+      check('明天到期文字', !dTom.classList.contains('overdue') && !dTom.classList.contains('today') && /明天到期/.test(dTom.textContent), dTom.textContent);
+      check('剩餘天數文字', /剩 7 天/.test(item('下週的任務').querySelector('.due-badge').textContent));
+      check('已逾期為紅色', isReddish(W.getComputedStyle(dOver).color), W.getComputedStyle(dOver).color);
+      check('今天到期為橘色', isOrange(W.getComputedStyle(dToday).color), W.getComputedStyle(dToday).color);
+      check('無截止日期不顯示日期標籤', !item('買牛奶').querySelector('.due-badge'));
+      check('截止日期已儲存', storedItem('明天的任務').dueDate === dayOffset(1));
+      check('新增後清空日期欄位', $('#due-input').value === '');
+      item('昨天的任務').querySelector('.toggle').click();
+      check('已完成的逾期任務不再標紅', !item('昨天的任務').querySelector('.due-badge').classList.contains('overdue'));
+      item('昨天的任務').querySelector('.toggle').click();
+
+      // ===== 排序 =====
+      setSort('priority');
+      var prioOrder = $$('.todo-item').map(function (li) { return li.className.match(/priority-(\w+)/)[1]; });
+      var ranks = prioOrder.map(function (p) { return { high: 0, medium: 1, low: 2 }[p]; });
+      check('依優先級排序（高→低）', ranks.every(function (r, i) { return i === 0 || ranks[i - 1] <= r; }), prioOrder.join(','));
+      check('同優先級依建立時間（新→舊）', texts()[0] === '明天的任務' && texts()[1] === '寫報告', texts().join('|'));
+      setSort('due');
+      check('依截止日期排序', texts().slice(0, 4).join('|') === '昨天的任務|今天的任務|明天的任務|下週的任務', texts().join('|'));
+      check('無截止日期排在最後', ['買牛奶', '遛 狗', '寫報告'].indexOf(texts()[6]) !== -1 && texts().length === 7);
+      setSort('created');
+      check('依建立時間排序', texts()[0] === '下週的任務' && texts()[6] === '買牛奶', texts().join('|'));
+
+      // 清理日期任務
+      ['昨天的任務', '今天的任務', '明天的任務', '下週的任務'].forEach(function (t) { item(t).querySelector('[data-action="delete"]').click(); });
+
+      // ===== 完成任務 =====
+      item('買牛奶').querySelector('.toggle').click();
+      check('勾選後標示為已完成', item('買牛奶').classList.contains('completed'));
+      check('完成狀態已儲存', storedItem('買牛奶').completed === true);
+      check('剩餘數量更新', $('#todo-count').textContent === '剩餘 2 項任務', $('#todo-count').textContent);
+      check('「清除已完成」啟用', !$('#clear-completed').disabled);
+      item('買牛奶').querySelector('.toggle').click();
+      check('取消勾選恢復未完成', !item('買牛奶').classList.contains('completed'));
+      item('買牛奶').querySelector('.toggle').click();
+
+      // ===== 統計儀表板 =====
+      check('儀表板數字正確（3 項／1 完成）', stats() === '3,1,2,33%', stats());
+      check('進度條寬度同步', $('#progress-bar').style.width === '33%', $('#progress-bar').style.width);
+      check('進度條無障礙數值', $('.progress').getAttribute('aria-valuenow') === '33');
+      check('儀表板標籤為中文', $$('.stat-label').map(function (e) { return e.textContent; }).join('|') === '總任務數|已完成|未完成|完成率');
+
+      // ===== 編輯 =====
+      item('寫報告').querySelector('[data-action="edit"]').click();
       var ed = $('.todo-edit');
-      check('Edit field appears', !!ed);
-      check('Edit field focused', D.activeElement === ed);
-      ed.value = 'Write final report';
-      ed.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      check('Edit saved via Enter', texts().indexOf('Write final report') !== -1 && !$('.todo-edit'), texts().join('|'));
-      check('Edit persisted', stored().some(function (t) { return t.text === 'Write final report'; }));
+      check('出現編輯欄位', !!ed && !!$('.edit-due') && !!$('.edit-priority'));
+      check('編輯欄位自動聚焦', D.activeElement === ed);
+      check('編輯按鈕為中文', !!$('[data-action="save"]') && $('[data-action="save"]').textContent === '儲存' && $('[data-action="cancel"]').textContent === '取消');
+      ed.value = '寫期末報告';
+      $('.edit-due').value = dayOffset(3);
+      $('.edit-priority').value = 'low';
+      key(ed, 'Enter');
+      check('按 Enter 儲存編輯', texts().indexOf('寫期末報告') !== -1 && !$('.todo-edit'), texts().join('|'));
+      var e1 = storedItem('寫期末報告');
+      check('編輯可修改截止日期與優先級', e1 && e1.dueDate === dayOffset(3) && e1.priority === 'low', JSON.stringify(e1));
+      check('編輯後樣式更新', item('寫期末報告').classList.contains('priority-low') && /剩 3 天/.test(item('寫期末報告').querySelector('.due-badge').textContent));
 
-      // Edit cancel via Escape
-      itemByText('Walk the dog').querySelector('[data-action="edit"]').click();
-      $('.todo-edit').value = 'SHOULD NOT SAVE';
-      $('.todo-edit').dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      check('Escape cancels edit', texts().indexOf('Walk the dog') !== -1 && texts().indexOf('SHOULD NOT SAVE') === -1, texts().join('|'));
+      item('遛 狗').querySelector('[data-action="edit"]').click();
+      $('.todo-edit').value = '不應儲存';
+      key($('.todo-edit'), 'Escape');
+      check('按 Esc 取消編輯', texts().indexOf('遛 狗') !== -1 && texts().indexOf('不應儲存') === -1, texts().join('|'));
 
-      // Edit via double-click + Save button
-      itemByText('Walk the dog').querySelector('.todo-text').dispatchEvent(new W.MouseEvent('dblclick', { bubbles: true }));
-      check('Double-click enters edit', !!$('.todo-edit'));
-      $('.todo-edit').value = 'Walk the cat';
+      item('遛 狗').querySelector('.todo-text').dispatchEvent(new W.MouseEvent('dblclick', { bubbles: true }));
+      check('按兩下進入編輯', !!$('.todo-edit'));
+      $('.todo-edit').value = '遛貓';
       $('[data-action="save"]').click();
-      check('Save button saves', texts().indexOf('Walk the cat') !== -1, texts().join('|'));
+      check('「儲存」按鈕可儲存', texts().indexOf('遛貓') !== -1, texts().join('|'));
 
-      // Edit via Cancel button
-      itemByText('Walk the cat').querySelector('[data-action="edit"]').click();
-      $('.todo-edit').value = 'nope';
+      item('遛貓').querySelector('[data-action="edit"]').click();
+      $('.todo-edit').value = '不要';
       $('[data-action="cancel"]').click();
-      check('Cancel button reverts', texts().indexOf('Walk the cat') !== -1 && texts().indexOf('nope') === -1, texts().join('|'));
+      check('「取消」按鈕可還原', texts().indexOf('遛貓') !== -1 && texts().indexOf('不要') === -1, texts().join('|'));
 
-      // Edit saves on blur
-      itemByText('Walk the cat').querySelector('[data-action="edit"]').click();
-      $('.todo-edit').value = 'Walk the cat (blur)';
+      item('遛貓').querySelector('[data-action="edit"]').click();
+      $('.todo-edit').value = '遛貓（失焦）';
+      $('.edit-due').focus();
+      check('焦點移至同任務的日期欄不會提前儲存', !!$('.todo-edit'));
       $('#search-input').focus();
-      check('Edit saves on blur', texts().indexOf('Walk the cat (blur)') !== -1, texts().join('|'));
+      check('焦點離開時自動儲存', texts().indexOf('遛貓（失焦）') !== -1, texts().join('|'));
 
-      // Empty edit deletes
-      add('Temp task');
-      itemByText('Temp task').querySelector('[data-action="edit"]').click();
+      add('暫時任務');
+      item('暫時任務').querySelector('[data-action="edit"]').click();
       $('.todo-edit').value = '   ';
-      $('.todo-edit').dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      check('Empty edit deletes task', !itemByText('Temp task') && $$('.todo-item').length === 3, texts().join('|'));
+      key($('.todo-edit'), 'Enter');
+      check('清空內容即刪除任務', !item('暫時任務') && $$('.todo-item').length === 3, texts().join('|'));
 
-      // Filters
+      // ===== 篩選 =====
       setFilter('active');
-      check('Active filter', texts().length === 2 && texts().indexOf('Buy milk') === -1, texts().join('|'));
-      check('Active button pressed', $('.filter-btn[data-filter="active"]').getAttribute('aria-pressed') === 'true');
+      check('「未完成」篩選', texts().length === 2 && texts().indexOf('買牛奶') === -1, texts().join('|'));
+      check('篩選按鈕狀態', $('.filter-btn[data-filter="active"]').getAttribute('aria-pressed') === 'true');
       setFilter('completed');
-      check('Completed filter', texts().length === 1 && texts()[0] === 'Buy milk', texts().join('|'));
+      check('「已完成」篩選', texts().length === 1 && texts()[0] === '買牛奶', texts().join('|'));
       setFilter('all');
-      check('All filter', texts().length === 3);
+      check('「全部」篩選', texts().length === 3);
 
-      // Search
-      setSearch('WALK');
-      check('Search case-insensitive', texts().length === 1 && /Walk/.test(texts()[0]), texts().join('|'));
-      setSearch('zzz');
-      check('Search no-match empty state', texts().length === 0 && !$('#empty-state').hidden && /No tasks match/.test($('#empty-state').textContent));
-      setSearch('report');
+      // ===== 搜尋 =====
+      setSearch('貓');
+      check('搜尋任務', texts().length === 1 && /遛貓/.test(texts()[0]), texts().join('|'));
+      setSearch('ABC');
+      add('Buy Apples');
+      setSearch('apple');
+      check('英文搜尋不分大小寫', texts().length === 1 && texts()[0] === 'Buy Apples', texts().join('|'));
+      item('Buy Apples').querySelector('[data-action="delete"]').click();
+      setSearch('不存在的內容');
+      check('搜尋無結果提示', texts().length === 0 && !$('#empty-state').hidden && /找不到符合/.test($('#empty-state').textContent), $('#empty-state').textContent);
+      setSearch('報告');
       setFilter('completed');
-      check('Search + filter combined', texts().length === 0);
+      check('搜尋與篩選可同時使用', texts().length === 0);
       setFilter('all');
       setSearch('');
-      check('Clearing search restores list', texts().length === 3);
+      check('清除搜尋恢復列表', texts().length === 3);
 
-      // Clear completed
+      // ===== 清除已完成 =====
       $('#clear-completed').click();
-      check('Clear completed removes done tasks', texts().length === 2 && texts().indexOf('Buy milk') === -1, texts().join('|'));
-      check('Clear completed disabled after', $('#clear-completed').disabled);
+      check('清除已完成任務', texts().length === 2 && texts().indexOf('買牛奶') === -1, texts().join('|'));
+      check('清除後顯示提示', /已清除 1 項/.test($('#toast').textContent), $('#toast').textContent);
+      check('清除後按鈕停用', $('#clear-completed').disabled);
+      check('儀表板同步更新', stats() === '2,0,2,0%', stats());
 
-      // Persistence across reload
-      itemByText('Write final report').querySelector('.toggle').click();
-      await load();
-      W = frame.contentWindow; D = W.document;
-      check('Tasks survive reload', texts().length === 2, texts().join('|'));
-      check('Completed state survives reload', itemByText('Write final report').classList.contains('completed'));
+      // ===== 重新載入後保留資料 =====
+      item('寫期末報告').querySelector('.toggle').click();
+      await reload();
+      check('重新載入後保留任務', texts().length === 2, texts().join('|'));
+      check('重新載入後保留完成狀態', item('寫期末報告').classList.contains('completed'));
+      check('重新載入後保留優先級與日期', item('寫期末報告').classList.contains('priority-low') && !!item('寫期末報告').querySelector('.due-badge'));
+      check('重新載入後儀表板正確', stats() === '2,1,1,50%', stats());
 
-      // Dark mode
+      // ===== 舊版資料移轉 =====
+      W.localStorage.setItem('todo-app:todos', JSON.stringify([{ id: 'old1', text: '舊任務', completed: false, createdAt: 1 }, { id: 'bad', text: '壞資料', priority: 'urgent', dueDate: 'tomorrow' }]));
+      await reload();
+      check('舊版資料自動補上中優先級', item('舊任務') && item('舊任務').classList.contains('priority-medium'));
+      check('無效的優先級與日期被修正', item('壞資料').classList.contains('priority-medium') && !item('壞資料').querySelector('.due-badge'));
+
+      // ===== 深色模式 =====
       var before = D.documentElement.getAttribute('data-theme');
       $('#theme-toggle').click();
       var after = D.documentElement.getAttribute('data-theme');
-      check('Theme toggles', before !== after && (after === 'dark' || after === 'light'), before + '→' + after);
-      check('Theme persisted', W.localStorage.getItem('todo-app:theme') === after);
-      await load();
-      W = frame.contentWindow; D = W.document;
-      check('Theme survives reload', D.documentElement.getAttribute('data-theme') === after);
-      function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-      await wait(300);
-      check('Transitions enabled after load', D.documentElement.classList.contains('theme-ready'));
-      // Animations don't advance in offscreen headless frames; disable them to verify final colors.
+      check('切換主題', before !== after && (after === 'dark' || after === 'light'), before + '→' + after);
+      check('主題已儲存', W.localStorage.getItem('todo-app:theme') === after);
+      check('瀏覽器主題色同步', $('meta[name="theme-color"]').content === (after === 'dark' ? '#0b0d1a' : '#6366f1'));
+      check('主題切換按鈕為中文標籤', $('#theme-toggle').getAttribute('aria-label') === '切換深色模式');
+      await reload();
+      check('重新載入後保留主題', D.documentElement.getAttribute('data-theme') === after);
+      await wait(200); // 等待備援計時器（150ms）啟用過場
+      check('載入後啟用過場動畫', D.documentElement.classList.contains('theme-ready'));
+      // 無頭模式下畫面外的 iframe 動畫不會推進，停用過場以檢查最終顏色
       var noAnim = D.createElement('style');
       noAnim.textContent = '* { transition: none !important; }';
       D.head.appendChild(noAnim);
       var bg1 = W.getComputedStyle(D.body).backgroundColor;
-      var var1 = W.getComputedStyle(D.documentElement).getPropertyValue('--bg').trim();
+      var v1 = W.getComputedStyle(D.documentElement).getPropertyValue('--bg').trim();
       $('#theme-toggle').click();
       var bg2 = W.getComputedStyle(D.body).backgroundColor;
-      var var2 = W.getComputedStyle(D.documentElement).getPropertyValue('--bg').trim();
-      check('Theme changes CSS variables', var1 !== var2, var1 + ' vs ' + var2);
-      check('Theme changes rendered colors', bg1 !== bg2, bg1 + ' vs ' + bg2);
+      var v2 = W.getComputedStyle(D.documentElement).getPropertyValue('--bg').trim();
+      check('主題切換 CSS 變數', v1 !== v2, v1 + ' vs ' + v2);
+      check('主題切換實際顏色', bg1 !== bg2, bg1 + ' vs ' + bg2);
 
-      // Corrupted storage handled
+      // ===== 毛玻璃樣式 =====
+      var panelStyle = W.getComputedStyle($('.panel'));
+      var bf = panelStyle.backdropFilter || panelStyle.webkitBackdropFilter || '';
+      check('面板使用毛玻璃效果', /blur/.test(bf), bf);
+      check('儀表板有 4 張卡片', $$('.stat-card').length === 4);
+
+      // ===== 資料損毀處理 =====
       W.localStorage.setItem('todo-app:todos', '{not json');
-      await load();
-      W = frame.contentWindow; D = W.document;
-      check('Corrupt storage does not crash', $$('.todo-item').length === 0 && !$('#empty-state').hidden);
+      await reload();
+      check('損毀資料不會造成錯誤', $$('.todo-item').length === 0 && !$('#empty-state').hidden);
 
-      // Responsive: mobile breakpoint
+      // ===== 響應式 =====
+      add('手機版測試任務', dayOffset(2), 'high');
       frame.style.width = '360px';
-      await new Promise(function (r) { setTimeout(r, 50); });
-      check('Mobile layout stacks toolbar', W.getComputedStyle($('.toolbar')).flexDirection === 'column', W.getComputedStyle($('.toolbar')).flexDirection);
-      check('No horizontal overflow on mobile', D.documentElement.scrollWidth <= W.innerWidth, D.documentElement.scrollWidth + ' > ' + W.innerWidth);
+      await wait(80);
+      check('手機版工具列改為直向', W.getComputedStyle($('.toolbar-row')).flexDirection === 'column', W.getComputedStyle($('.toolbar-row')).flexDirection);
+      check('手機版儀表板兩欄', W.getComputedStyle($('.dashboard')).gridTemplateColumns.split(' ').length === 2, W.getComputedStyle($('.dashboard')).gridTemplateColumns);
+      check('手機版無水平捲動', D.documentElement.scrollWidth <= W.innerWidth, D.documentElement.scrollWidth + ' > ' + W.innerWidth);
+      check('手機版輸入框至少 16px（避免 iOS 放大）', parseFloat(W.getComputedStyle($('#todo-input')).fontSize) >= 16);
+      frame.style.width = '820px';
+      await wait(80);
+      check('桌面版儀表板四欄', W.getComputedStyle($('.dashboard')).gridTemplateColumns.split(' ').length === 4);
+
+      // ===== PWA =====
+      check('頁面連結 manifest', !!$('link[rel="manifest"]'));
+      check('頁面設定 apple-touch-icon', !!$('link[rel="apple-touch-icon"]'));
+      var manifest = JSON.parse(await fetchText('../manifest.json'));
+      check('manifest 名稱為中文', manifest.short_name === '待辦清單' && /待辦清單/.test(manifest.name));
+      check('manifest 為獨立視窗模式', manifest.display === 'standalone');
+      check('manifest start_url 與 scope', manifest.start_url === './' && manifest.scope === './');
+      var sizes = manifest.icons.map(function (i) { return i.sizes; });
+      check('manifest 含 192 與 512 圖示', sizes.indexOf('192x192') !== -1 && sizes.indexOf('512x512') !== -1);
+      check('manifest 含可遮罩圖示', manifest.icons.some(function (i) { return i.purpose === 'maskable'; }));
+      for (var i = 0; i < manifest.icons.length; i++) {
+        var ic = manifest.icons[i];
+        var dim = await loadImage('../' + ic.src);
+        check('圖示存在且尺寸正確：' + ic.src, dim && (dim.w + 'x' + dim.h) === ic.sizes, dim && dim.w + 'x' + dim.h);
+      }
+      var sw = await fetchText('../service-worker.js');
+      check('Service Worker 檔案存在', /addEventListener\('fetch'/.test(sw) && /addEventListener\('install'/.test(sw));
+      var shell = sw.match(/'\.\/[^']*'/g).map(function (s) { return s.slice(3, -1); });
+      for (var j = 0; j < shell.length; j++) {
+        if (!shell[j] || shell[j] === 'index.html') continue;
+        try { await fetchText('../' + shell[j]); check('快取清單檔案存在：' + shell[j], true); }
+        catch (err) { check('快取清單檔案存在：' + shell[j], false, err.message); }
+      }
+
+      if (isHttp) {
+        // 於 http(s) 環境實際驗證 Service Worker 註冊與離線快取
+        var reg = await Promise.race([W.navigator.serviceWorker.ready, wait(15000).then(function () { return null; })]);
+        check('Service Worker 已註冊並啟用', !!(reg && reg.active), reg ? reg.active && reg.active.state : 'timeout');
+        await wait(1500);
+        var keys = await W.caches.keys();
+        var cacheName = keys.filter(function (k) { return k.indexOf('todo-app-') === 0; })[0];
+        check('已建立離線快取', !!cacheName, keys.join(','));
+        if (cacheName) {
+          var cache = await W.caches.open(cacheName);
+          var hits = await Promise.all(['index.html', 'app.js', 'styles.css', 'manifest.json'].map(function (f) {
+            return cache.match(new URL('../' + f, location.href).href);
+          }));
+          check('App 外殼已快取（離線可用）', hits.every(Boolean), hits.map(Boolean).join(','));
+        }
+      }
 
       W.localStorage.clear();
     } catch (e) {
-      log(false, 'Unexpected exception', e && (e.stack || e.message || e));
+      log(false, '發生未預期的錯誤', e && (e.stack || e.message || e));
     }
 
     summaryEl.textContent = 'DONE passed=' + passed + ' failed=' + failed;
