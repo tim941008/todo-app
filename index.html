@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="A fast, offline-friendly Todo app with dark mode, search and filters." />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>Todo App</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Apply saved theme before paint to avoid a flash of the wrong theme.
+    (function () {
+      try {
+        var t = localStorage.getItem('todo-app:theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <main class="app" aria-labelledby="app-title">
+    <header class="app-header">
+      <h1 id="app-title">My Tasks</h1>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <span class="icon-sun" aria-hidden="true">☀️</span>
+        <span class="icon-moon" aria-hidden="true">🌙</span>
+      </button>
+    </header>
+
+    <form id="todo-form" class="todo-form" autocomplete="off">
+      <label for="todo-input" class="sr-only">New task</label>
+      <input id="todo-input" type="text" placeholder="What needs to be done?" maxlength="200" required />
+      <button type="submit" class="btn-primary">Add</button>
+    </form>
+    <p id="form-error" class="form-error" role="alert" hidden></p>
+
+    <section class="toolbar" aria-label="Search and filter">
+      <label for="search-input" class="sr-only">Search tasks</label>
+      <input id="search-input" type="search" placeholder="Search tasks…" />
+      <div class="filters" role="group" aria-label="Filter tasks">
+        <button type="button" class="filter-btn active" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" class="filter-btn" data-filter="active" aria-pressed="false">Active</button>
+        <button type="button" class="filter-btn" data-filter="completed" aria-pressed="false">Completed</button>
+      </div>
+    </section>
+
+    <ul id="todo-list" class="todo-list" aria-live="polite"></ul>
+    <p id="empty-state" class="empty-state" hidden></p>
+
+    <footer class="app-footer">
+      <span id="todo-count">0 tasks left</span>
+      <button id="clear-completed" type="button" class="link-btn">Clear completed</button>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

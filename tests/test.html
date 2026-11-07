@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Todo App – Tests</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 1rem; }
+    .pass { color: #16a34a; } .fail { color: #dc2626; font-weight: bold; }
+    iframe { width: 420px; height: 600px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Todo App Tests</h1>
+  <pre id="summary">running…</pre>
+  <ol id="results"></ol>
+  <iframe id="frame" title="App under test"></iframe>
+
+  <script>
+  (async function () {
+    var frame = document.getElementById('frame');
+    var resultsEl = document.getElementById('results');
+    var summaryEl = document.getElementById('summary');
+    var passed = 0, failed = 0;
+
+    function log(ok, name, detail) {
+      var li = document.createElement('li');
+      li.className = ok ? 'pass' : 'fail';
+      li.textContent = (ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '');
+      resultsEl.appendChild(li);
+      ok ? passed++ : failed++;
+    }
+    function check(name, cond, detail) { log(!!cond, name, cond ? '' : detail); }
+
+    function load() {
+      return new Promise(function (res) {
+        frame.onload = function () { setTimeout(res, 50); };
+        frame.src = '../index.html?t=' + Date.now();
+      });
+    }
+    var W, D;
+    function $(s) { return D.querySelector(s); }
+    function $$(s) { return Array.prototype.slice.call(D.querySelectorAll(s)); }
+    function texts() { return $$('.todo-text').map(function (e) { return e.textContent; }); }
+    function add(text) {
+      $('#todo-input').value = text;
+      $('#todo-form').dispatchEvent(new W.Event('submit', { cancelable: true, bubbles: true }));
+    }
+    function itemByText(t) {
+      return $$('.todo-item').filter(function (li) {
+        var s = li.querySelector('.todo-text'); return s && s.textContent === t;
+      })[0];
+    }
+    function stored() { return JSON.parse(W.localStorage.getItem('todo-app:todos') || '[]'); }
+    function setSearch(v) { $('#search-input').value = v; $('#search-input').dispatchEvent(new W.Event('input', { bubbles: true })); }
+    function setFilter(f) { $('.filter-btn[data-filter="' + f + '"]').click(); }
+
+    try {
+      // Fresh start
+      await load();
+      frame.contentWindow.localStorage.clear();
+      await load();
+      W = frame.contentWindow; D = W.document;
+
+      check('Empty state shown initially', !$('#empty-state').hidden && /No tasks yet/.test($('#empty-state').textContent));
+      check('Counter shows 0', $('#todo-count').textContent === '0 tasks left', $('#todo-count').textContent);
+      check('Clear completed disabled initially', $('#clear-completed').disabled);
+
+      // Add
+      add('Buy milk');
+      add('  Walk   the dog  ');
+      add('Write report');
+      check('Adds 3 tasks', $$('.todo-item').length === 3, $$('.todo-item').length);
+      check('Newest task first', texts()[0] === 'Write report', texts().join('|'));
+      check('Whitespace normalized', texts().indexOf('Walk the dog') !== -1, texts().join('|'));
+      check('Input cleared after add', $('#todo-input').value === '');
+      check('Counter pluralized', $('#todo-count').textContent === '3 tasks left', $('#todo-count').textContent);
+      check('Persisted to localStorage', stored().length === 3);
+
+      // Empty add rejected
+      add('    ');
+      check('Empty task rejected', $$('.todo-item').length === 3);
+      check('Empty task shows error', !$('#form-error').hidden);
+
+      // XSS safety
+      add('<img src=x onerror="window.__xss=1">');
+      check('HTML rendered as text', !$('.todo-text img') && W.__xss === undefined);
+
+      // Long text truncated
+      add(new Array(300).join('a'));
+      check('Long text capped at 200 chars', texts()[0].length === 200, texts()[0].length);
+
+      // Delete
+      itemByText('<img src=x onerror="window.__xss=1">').querySelector('[data-action="delete"]').click();
+      $$('.todo-item')[0].querySelector('[data-action="delete"]').click();
+      check('Delete removes tasks', $$('.todo-item').length === 3, $$('.todo-item').length);
+      check('Delete persisted', stored().length === 3);
+
+      // Complete
+      var cb = itemByText('Buy milk').querySelector('.toggle');
+      cb.click();
+      check('Toggle marks completed', itemByText('Buy milk').classList.contains('completed'));
+      check('Completion persisted', stored().filter(function (t) { return t.text === 'Buy milk'; })[0].completed === true);
+      check('Counter singular/updated', $('#todo-count').textContent === '2 tasks left', $('#todo-count').textContent);
+      check('Clear completed enabled', !$('#clear-completed').disabled);
+      itemByText('Buy milk').querySelector('.toggle').click();
+      check('Toggle back to active', !itemByText('Buy milk').classList.contains('completed'));
+      itemByText('Buy milk').querySelector('.toggle').click();
+
+      // Edit via button + Enter
+      itemByText('Write report').querySelector('[data-action="edit"]').click();
+      var ed = $('.todo-edit');
+      check('Edit field appears', !!ed);
+      check('Edit field focused', D.activeElement === ed);
+      ed.value = 'Write final report';
+      ed.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      check('Edit saved via Enter', texts().indexOf('Write final report') !== -1 && !$('.todo-edit'), texts().join('|'));
+      check('Edit persisted', stored().some(function (t) { return t.text === 'Write final report'; }));
+
+      // Edit cancel via Escape
+      itemByText('Walk the dog').querySelector('[data-action="edit"]').click();
+      $('.todo-edit').value = 'SHOULD NOT SAVE';
+      $('.todo-edit').dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      check('Escape cancels edit', texts().indexOf('Walk the dog') !== -1 && texts().indexOf('SHOULD NOT SAVE') === -1, texts().join('|'));
+
+      // Edit via double-click + Save button
+      itemByText('Walk the dog').querySelector('.todo-text').dispatchEvent(new W.MouseEvent('dblclick', { bubbles: true }));
+      check('Double-click enters edit', !!$('.todo-edit'));
+      $('.todo-edit').value = 'Walk the cat';
+      $('[data-action="save"]').click();
+      check('Save button saves', texts().indexOf('Walk the cat') !== -1, texts().join('|'));
+
+      // Edit via Cancel button
+      itemByText('Walk the cat').querySelector('[data-action="edit"]').click();
+      $('.todo-edit').value = 'nope';
+      $('[data-action="cancel"]').click();
+      check('Cancel button reverts', texts().indexOf('Walk the cat') !== -1 && texts().indexOf('nope') === -1, texts().join('|'));
+
+      // Edit saves on blur
+      itemByText('Walk the cat').querySelector('[data-action="edit"]').click();
+      $('.todo-edit').value = 'Walk the cat (blur)';
+      $('#search-input').focus();
+      check('Edit saves on blur', texts().indexOf('Walk the cat (blur)') !== -1, texts().join('|'));
+
+      // Empty edit deletes
+      add('Temp task');
+      itemByText('Temp task').querySelector('[data-action="edit"]').click();
+      $('.todo-edit').value = '   ';
+      $('.todo-edit').dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      check('Empty edit deletes task', !itemByText('Temp task') && $$('.todo-item').length === 3, texts().join('|'));
+
+      // Filters
+      setFilter('active');
+      check('Active filter', texts().length === 2 && texts().indexOf('Buy milk') === -1, texts().join('|'));
+      check('Active button pressed', $('.filter-btn[data-filter="active"]').getAttribute('aria-pressed') === 'true');
+      setFilter('completed');
+      check('Completed filter', texts().length === 1 && texts()[0] === 'Buy milk', texts().join('|'));
+      setFilter('all');
+      check('All filter', texts().length === 3);
+
+      // Search
+      setSearch('WALK');
+      check('Search case-insensitive', texts().length === 1 && /Walk/.test(texts()[0]), texts().join('|'));
+      setSearch('zzz');
+      check('Search no-match empty state', texts().length === 0 && !$('#empty-state').hidden && /No tasks match/.test($('#empty-state').textContent));
+      setSearch('report');
+      setFilter('completed');
+      check('Search + filter combined', texts().length === 0);
+      setFilter('all');
+      setSearch('');
+      check('Clearing search restores list', texts().length === 3);
+
+      // Clear completed
+      $('#clear-completed').click();
+      check('Clear completed removes done tasks', texts().length === 2 && texts().indexOf('Buy milk') === -1, texts().join('|'));
+      check('Clear completed disabled after', $('#clear-completed').disabled);
+
+      // Persistence across reload
+      itemByText('Write final report').querySelector('.toggle').click();
+      await load();
+      W = frame.contentWindow; D = W.document;
+      check('Tasks survive reload', texts().length === 2, texts().join('|'));
+      check('Completed state survives reload', itemByText('Write final report').classList.contains('completed'));
+
+      // Dark mode
+      var before = D.documentElement.getAttribute('data-theme');
+      $('#theme-toggle').click();
+      var after = D.documentElement.getAttribute('data-theme');
+      check('Theme toggles', before !== after && (after === 'dark' || after === 'light'), before + '→' + after);
+      check('Theme persisted', W.localStorage.getItem('todo-app:theme') === after);
+      await load();
+      W = frame.contentWindow; D = W.document;
+      check('Theme survives reload', D.documentElement.getAttribute('data-theme') === after);
+      function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+      await wait(300);
+      check('Transitions enabled after load', D.documentElement.classList.contains('theme-ready'));
+      // Animations don't advance in offscreen headless frames; disable them to verify final colors.
+      var noAnim = D.createElement('style');
+      noAnim.textContent = '* { transition: none !important; }';
+      D.head.appendChild(noAnim);
+      var bg1 = W.getComputedStyle(D.body).backgroundColor;
+      var var1 = W.getComputedStyle(D.documentElement).getPropertyValue('--bg').trim();
+      $('#theme-toggle').click();
+      var bg2 = W.getComputedStyle(D.body).backgroundColor;
+      var var2 = W.getComputedStyle(D.documentElement).getPropertyValue('--bg').trim();
+      check('Theme changes CSS variables', var1 !== var2, var1 + ' vs ' + var2);
+      check('Theme changes rendered colors', bg1 !== bg2, bg1 + ' vs ' + bg2);
+
+      // Corrupted storage handled
+      W.localStorage.setItem('todo-app:todos', '{not json');
+      await load();
+      W = frame.contentWindow; D = W.document;
+      check('Corrupt storage does not crash', $$('.todo-item').length === 0 && !$('#empty-state').hidden);
+
+      // Responsive: mobile breakpoint
+      frame.style.width = '360px';
+      await new Promise(function (r) { setTimeout(r, 50); });
+      check('Mobile layout stacks toolbar', W.getComputedStyle($('.toolbar')).flexDirection === 'column', W.getComputedStyle($('.toolbar')).flexDirection);
+      check('No horizontal overflow on mobile', D.documentElement.scrollWidth <= W.innerWidth, D.documentElement.scrollWidth + ' > ' + W.innerWidth);
+
+      W.localStorage.clear();
+    } catch (e) {
+      log(false, 'Unexpected exception', e && (e.stack || e.message || e));
+    }
+
+    summaryEl.textContent = 'DONE passed=' + passed + ' failed=' + failed;
+    document.title = 'DONE ' + passed + '/' + (passed + failed);
+  })();
+  </script>
+</body>
+</html>
